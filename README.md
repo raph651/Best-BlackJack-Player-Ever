@@ -12,3 +12,8 @@ To start the environment
 ```bash
 conda activate blackjack-AI
 ```
+To update the enironment.yml
+
+```bash
+conda env export > environment.yml
+```
