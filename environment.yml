@@ -1,0 +1,12 @@
+name: blackjack-AI
+channels:
+  -conda-forge
+dependencies:
+  - python=3.9
+  - numpy>=1.23
+  - pytorch>=1.10.0
+  - jupyter
+  - pip
+  - pip:
+    - tqdm
+    - matplotlib
