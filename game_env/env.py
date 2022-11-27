@@ -372,11 +372,12 @@ class BlackJackEnv:
                     self.state.lost = 0
                 elif dealer_hand_sum > player_hand_sum:
                     self.state.lost = -1
-                    self.earned_current_turn = self.state.bet * -2
+                    self.earned_current_turn = self.state.bet * -1
                 else:
                     self.state.lost = 1
                     self.earned_current_turn = self.state.bet * 2
                     self.player.money += self.earned_current_turn
+            self.state.earned+=self.earned_current_turn
             return self.state, self._get_reward(), True, {}
 
         if action == "Double":
@@ -391,8 +392,10 @@ class BlackJackEnv:
         # otherwise, continue the game
         if all([n > 21 for n in self.player.hands_sum]):
             self.state.lost = -1
-            self.earned_current_turn = self.state.bet * -2
+            self.earned_current_turn = self.state.bet * -1
             self.dealer.deal_one_card(self.cardpool)
+            self.state.earned+=self.earned_current_turn
+            
             return self.state.copy(), self._get_reward(), True, {}
 
         return self.state.copy(), self._get_reward(), False, {}
