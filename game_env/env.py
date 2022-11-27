@@ -2,6 +2,7 @@ from logging import raiseExceptions
 from random import randint
 from collections import Counter
 
+
 class CardPool:
     def __init__(self, n_deck: int):
         """initialize the card pool with total of n_deck * 52 cards
@@ -85,143 +86,185 @@ class CardPool:
             return False
         return True
 
+
 class Player:
-    def __init__(self, bets_options=None, initial_money=1000, ):
-        self.money =initial_money
-        self.actions =['Hit','Double','Stand']
+    def __init__(
+        self, initial_money=1000,
+    ):
+        self.money = initial_money
+        self.actions = ["Hit", "Double", "Stand"]
+        self.double = False
 
-        #self.bets_options = bets_options
-
-        self.hands=[] #current cards
-        self.hands_sum=[0] #current possibilities of card sums
+        self.hands = []  # current cards
+        self.hands_sum = [0]  # current possibilities of card sums
 
     def reset_round(self):
-        '''reset the hands and bet
-        '''
-        self.hands=[]
-        self.hands_sum=[0]
+        """reset the hands and bet
+        """
+        self.hands = []
+        self.hands_sum = [0]
         self.bet = None
+        self.double = False
         return
-    
-    def get_actions(self):
-        return self.actions
-    
-    def random_actions(self):
-        return self.actions[randint(0,len(self.actions)-1)]
 
-    def predict_bet(self,cardpool,betmodel):
-        '''reset the round, and let neural network to predict the best bet
-        '''
-        self.bet = betmodel(self.money,cardpool.cardLeft)
-        self.money-=self.bet
+    def get_actions(self):
+        if self.double:
+            return self.actions[:1]+self.actions[2:]
+        return self.actions
+
+    def random_actions(self):
+        return self.actions[randint(0, len(self.actions) - 1)]
+
+    def predict_bet(self, cardpool, betmodel):
+        """reset the round, and let neural network to predict the best bet
+        """
+        self.bet = betmodel(self.money, cardpool.cardLeft)
+        self.money -= self.bet
         return self.bet
 
-    def make_bet(self,bet):
-        '''given a player's choice on bet, proceed
-        '''
-        self.bet = 
+    def make_bet(self, bet):
+        """given a player's choice on bet, proceed
+        """
+        self.bet = bet
         self.money -= bet
-    
+
     def choose_bet(self):
-        '''prompt the player to make a bet choice
-        '''
-        bet = round(float(input(f'how much do you want to bet, in percentages based on current money {self.money}: ?% '))*self.money)
+        """prompt the player to make a bet choice
+        """
+        bet = round(
+            float(
+                input(
+                    f"how much do you want to bet, in percentages based on current money {self.money}: ?% "
+                )
+            )
+            * self.money
+        )
         self.make_bet(bet)
-        
-        
+        print(f"you bet {bet} $")
 
-    def start_round(self,cardpool):
-        '''start the round, get two cards from the pool
-        '''
+    def start_round(self, cardpool):
+        """start the round, get two cards from the pool
+        """
         newhand = cardpool.pick()
         self.update_hand(newhand)
         newhand = cardpool.pick()
         self.update_hand(newhand)
 
-    def update_hand(self, hand :str):
-        '''update the hands sum, return all possibilities
+    def update_hand(self, hand: str):
+        """update the hands sum, return all possibilities
         for example, hands = ['A', '5'] -> hands_sum = [6,16]
-        '''
+        """
         self.hands.append(hand)
-        if hand=='A':
-            self.hands_sum = [ i+1 for i in self.hands_sum]
-            self.hands_sum.append(self.hands_sum[-1]+10)
-        elif hand in ['J','Q','K']:
-            self.hands_sum = [i+10 for i in self.hands_sum]
+        if hand == "A":
+            self.hands_sum = [i + 1 for i in self.hands_sum]
+            self.hands_sum.append(self.hands_sum[-1] + 10)
+        elif hand in ["J", "Q", "K"]:
+            self.hands_sum = [i + 10 for i in self.hands_sum]
         else:
-            self.hands_sum =[i+ int(hand) for i in self.hands_sum]
+            self.hands_sum = [i + int(hand) for i in self.hands_sum]
 
-    def make_action(self,dealer,cardpool,net):
-        '''get the action model prediction: net(s,a) -> v
+    def predict_actions(self, dealer, cardpool, net):
+        """get the action model prediction: net(s,a) -> v
         then make the best action
-        '''
-        predictions={} # predictions for all possibility of hands sum
+        """
+        predictions = {}  # predictions for all possibility of hands sum
 
         for sum in self.hands_sum:
-            # current state to be determined
-            # [sum, revealed_card, cardLeft] 15x1 vector
-            # or [action (3x1 vector), sum,revealed_card, cardLeft] 18x1 vector
-
-            states = [sum]+ [dealer.revealed_card] + cardpool.cardLeft
+            # [action (3x1 vector), sum,revealed_card, cardLeft] 18x1 vector
+            states = [sum] + [dealer.revealed_card] + cardpool.cardLeft
             for action in self.get_actions():
-                pred = net(states,action)
-                predictions[(sum,action)]=pred
+                pred = net(states, action)
+                predictions[(sum, action)] = pred
 
         return predictions
+
+
         ## in progress: return and make the best action
+
         return 
 
+
 class Dealer:
-    def __init__(self,threshold=17):
+    def __init__(self, threshold=17):
         self.revealed = None
-        self.hands=[]
-        self.hands_sum=[0]
-        self.money=0
-        self.threshold=threshold
+        self.hands = []
+        self.hands_sum = [0]
+        self.money = 0
+        self.threshold = threshold
 
     def reset_round(self):
-        self.revealed=None
-        self.hands=[]
-        self.hands_sum=[0]
-    
-    def start_round(self,cardpool):
-        '''start the round, get two cards from the pool, reveal the first
-        '''
+        self.revealed = None
+        self.hands = []
+        self.hands_sum = [0]
+
+    def start_round(self, cardpool):
+        """start the round, get two cards from the pool, reveal the first
+        """
         newhand = cardpool.pick()
         self.update_hand(newhand)
+
         # make this first card revealed
         self.revealed = newhand
 
-        newhand = cardpool.pick()
-        self.update_hand(newhand)        
+        # newhand = cardpool.pick()
+        # self.update_hand(newhand)
 
-    def update_hand(self, hand :str):
-        '''update the hands sum, return all possibilities
+    def update_hand(self, hand: str):
+        """update the hands sum, return all possibilities
         for example, hands = ['A', '5'] -> hands_sum = [6,16]
-        '''
+        """
         self.hands.append(hand)
-        if hand=='A':
-            self.hands_sum = [ i+1 for i in self.hands_sum]
-            self.hands_sum.append(self.hands_sum[-1]+10)
-        elif hand in ['J','Q','K']:
-            self.hands_sum = [i+10 for i in self.hands_sum]
+        if hand == "A":
+            self.hands_sum = [i + 1 for i in self.hands_sum]
+            ## not appending this sum if bigger than 21
+            if self.hands_sum[-1]+10<=21:
+                self.hands_sum.append(self.hands_sum[-1] + 10)
+        elif hand in ["J", "Q", "K"]:
+            self.hands_sum = [i + 10 for i in self.hands_sum]
         else:
-            self.hands_sum =[i+ int(hand) for i in self.hands_sum]
-    
+            self.hands_sum = [i + int(hand) for i in self.hands_sum]
+
     def make_action(self):
-        '''default policy, dealer must hit with any hand of 16 points or 
+        """default policy, dealer must hit with any hand of 16 points or 
         less, but must stand with any hand of 17 or more
-        '''
+        """
+
+
+class BlackJackState:
+    def __init__(self, cardleft, revealed, hands_sum,turn):
+        self.cardleft = cardleft
+        self.revealed = revealed
+        self.hands_sum = hands_sum
+        self.turn = turn
+
+    def copy(self):
+        return BlackJackState(
+            self.cardleft.copy(), self.revealed, self.hands_sum.copy()
+        )
+
 
 class BlackJackEnv:
-    def __init__(self,n_deck=6,player_num=1):
+    def __init__(self, n_deck=6, player_num=1):
 
         self.cardpool = CardPool(n_deck)
-        if player_num >1:
-            print('multiple players in progress, player_num is set to 1')
-        '''if multiple players:
+        if player_num > 1:
+            print("multiple players in progress, player_num is set to 1")
+        """if multiple players:
             in progress
-        '''
-        #self.bet_options = [1,5,10,20,50,100,200]
+        """
+        # self.bet_options = [1,5,10,20,50,100,200]
 
-        self.player = Player()
+        self.player = Player(initial_money=1000)
+        self.dealer = Dealer()
+        self.earned = 0
+        self.turn =0
+        self.state = None
+
+
+    
+    def check_game_end(self):
+
+
+    def step(self):
+
+
