@@ -42,5 +42,5 @@ class QNet(nn.Module):
             nn.Tanh(),
         )
     def forward(self,x):
-        shared  = self.encoder(x)
+        shared = self.encoder(x)
         return self.prob_decoder(shared), self.value_decoder(shared)

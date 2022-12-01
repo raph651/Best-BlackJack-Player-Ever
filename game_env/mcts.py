@@ -1,5 +1,5 @@
 import pickle
-
+import qnet
 import env
 
 import numpy as np
@@ -37,7 +37,9 @@ class Node:
         self.Q = [0]*3
         # action prob
         # fill by probability returned by neural net, take only prob
-        self.P = network(state)[1]
+        print(torch.FloatTensor([state]))
+        print(network(torch.FloatTensor([state])))
+        self.P = network(torch.FloatTensor([state]))[1]
 
 
 class MCT:
@@ -74,15 +76,16 @@ class MCT:
 
     def search(self, root, search_amount):
         cur = root
-        temp_env = self.env.copy()
+        temp_env = self.env
         for _ in range(search_amount):
             # reset random seed here?
             # code to add maybe?
+            self.env = temp_env.copy()
             action = self.get_good_action(cur)
             done, reward = temp_env.step(action)
             while not done:
                 # expand the search until done
-                cur = self.get_child(cur, temp_env.state.input, action)
+                cur = self.get_child(cur, temp_env.state.input(), action)
                 action = self.get_good_action(cur)
                 done, reward = temp_env.step(action)
 
@@ -125,8 +128,8 @@ def simulate(new_model, training_itr, deck_num, search_amount, explore_constant)
         loss = (v-q)**2 + pi * np.log(p)
         return loss
 
-    optimizer = torch.optim.Adam(lr=0.01, weight_decay=0.01)
-    network =
+    network = qnet.QNet()
+    optimizer = torch.optim.Adam(network.parameters(), lr=0.01, weight_decay=0.01)
     tree = MCT(network, optimizer, criterion)
     tree.reset(deck_num, search_amount, explore_constant)
 
@@ -140,7 +143,7 @@ def simulate(new_model, training_itr, deck_num, search_amount, explore_constant)
 
     for _ in range(training_itr):
         tree.env.new_round()
-        root = Node(state=tree.env.state.input, parent=None, prior_action=None, network=tree.network)
+        root = Node(state=tree.env.state.input(), parent=None, prior_action=None, network=tree.network)
         tree.search(root, 1)
         if tree.dataset.new_count >= 200 and len(tree.dataset) >= 400:
             tree.train()
@@ -153,4 +156,4 @@ def simulate(new_model, training_itr, deck_num, search_amount, explore_constant)
         pickle.dump(tree.dataset.data, file)
 
 if __name__ == '__main__':
-    simulate(new_model=1, training_itr=1000, deck_num=6, search_amount=100, explore_constant=1)
+    simulate(new_model=0, training_itr=1000, deck_num=6, search_amount=100, explore_constant=1)
