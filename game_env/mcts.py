@@ -22,6 +22,7 @@ class Dset(Dataset):
 
     def add(self, node):
         self.data.append(node)
+        self.new_count += 1
 
 
 class Node:
@@ -40,7 +41,8 @@ class Node:
         # fill by probability returned by neural net, take only prob
         # add another indexing [0] because the output p has shape [1,3]
         # after adding, it has shape [3]
-        self.P = network(torch.FloatTensor([state]))[0][0]
+        if state:
+            self.P = network(torch.FloatTensor([state]))[0][0]
 
 
 class MCT:
@@ -67,7 +69,7 @@ class MCT:
         else:
             root.child = Node(state, root, action, self.network)
             self.states[state] = root.child
-            self.search(root.child, self.search_amount)
+            self.search(root.child)
         return root.child
 
     def get_good_action(self, root):
@@ -78,26 +80,45 @@ class MCT:
 
         return max(self.env.player.actions, key=metric)
 
-    def search(self, root, search_amount):
-        cur = root
+    def search(self, root):
+        # print('search', self.env.state.input())
         temp_env = self.env
-        for _ in range(search_amount):
+        for _ in range(self.search_amount):
             # reset random seed here?
             # code to add maybe?
             self.env = deepcopy(temp_env)
+            cur = root
             while True:
                 action = self.get_good_action(cur)
-                print(tuple(self.env.state.input()))
-                done, reward = self.env.step(action)
+                # print(tuple(self.env.state.input()))
+                reward, done = self.env.step(action)
                 if done:
-                    print('hey')
+                    # symbolic child just for backtrack purpose
+                    cur.child = Node(state=[], parent=cur, prior_action=action, network=None)
+                    cur = cur.child
+                    # print("reward: ", reward)
                     self.backtrack(cur, reward, root)
                     break
                 cur = self.get_child(cur, tuple(self.env.state.input()), action)
 
         self.env = temp_env
-        self.dataset.add(root)
+        if root.state[-1] > 21 or root.state[-2] > 21 or root.state[-3] > 21:
+            print(root.state)
+            input()
+        self.dataset.add(root.state)
 
+    def run(self, root):
+        if root.state and root.state not in self.states:
+            self.search(root)
+
+        cur = root
+        while True:
+            action = self.get_good_action(cur)
+            reward, done = self.env.step(action)
+            if done:
+                self.backtrack(cur, reward, root)
+                break
+            cur = self.get_child(cur, tuple(self.env.state.input()), action)
 
     def backtrack(self, cur, reward, root):
         while cur.state != root.state:
@@ -107,7 +128,10 @@ class MCT:
             parent.N[prior_action] += 1
             parent.Q[prior_action] = parent.W[prior_action]/parent.N[prior_action]
             parent.P = [n/sum(parent.N) for n in parent.N]
-            cur = parent
+
+            cur = cur.parent
+            if cur.state != root.state:
+                break
 
     def train(self):
         #trim old data and restart counting
@@ -116,9 +140,15 @@ class MCT:
 
         loader = DataLoader(self.dataset, batch_size=20, shuffle=True)
         for epoch in range(5):
-            for node in loader:
+            for state in loader:
                 # value prediction and prob prediction
-                v, p = self.network(torch.FloatTensor(node.state))
+                try:
+                    node = self.states[state]
+                except:
+                    print("hey")
+                    print(state)
+                    input()
+                v, p = self.network(torch.FloatTensor(state))
                 q, pi = node.Q, node.P
 
                 self.optimizer.zero_grad()
@@ -147,17 +177,14 @@ def simulate(new_model, training_itr, deck_num, search_amount, explore_constant)
             tree.dataset.data = pickle.load(file)
 
     for _ in range(training_itr):
-        print(_)
+        print("itr: ", _)
         tree.env.new_round()
         root = Node(state=tree.env.state.input(), parent=None, prior_action=None, network=tree.network)
-        if root.state not in tree.states:
-            print('start')
-            tree.search(root, 40)
-        tree.search(root, 1)
-        print("ga")
-        input()
+
+        tree.run(root)
         if tree.dataset.new_count >= 200 and len(tree.dataset) >= 400:
             tree.train()
+            print(network.state_dict())
 
     torch.save({
         'model_state_dict': network.state_dict(),
@@ -167,4 +194,4 @@ def simulate(new_model, training_itr, deck_num, search_amount, explore_constant)
         pickle.dump(tree.dataset.data, file)
 
 if __name__ == '__main__':
-    simulate(new_model=0, training_itr=1000, deck_num=6, search_amount=100, explore_constant=1)
+    simulate(new_model=0, training_itr=50, deck_num=6, search_amount=100, explore_constant=1)

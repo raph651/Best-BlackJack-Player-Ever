@@ -34,6 +34,7 @@ class CardPool:
     def reset(self):
         self.cardLeft = [self.n_deck * 4] * 13
         self.mapping = {}
+        self.cardCounter = Counter({i: self.n_deck * 4 for i in self.idxs.values()})
         self.N = self.n_deck * 52
 
     def pick(self) -> str:
@@ -304,6 +305,8 @@ class BlackJackEnv:
             print("use env.new_round to start a new round")
 
     def step(self, action):
+        '''return reward, done
+        '''
         self.state.turn += 1
         self.earned_current_turn = 0
 
@@ -323,8 +326,9 @@ class BlackJackEnv:
                     self.player.money += self.earned_current_turn
 
                     self.history.append(self.state.lost)
+                    reward = self._get_reward()
                     self.new_round()
-                    return self._get_reward(), True
+                    return reward, True
 
             # then the dealer picks cards based on the default policy
             self.dealer.make_action(self.cardpool)
@@ -347,8 +351,9 @@ class BlackJackEnv:
             self.state.earned += self.earned_current_turn
 
             self.history.append(self.state.lost)
-            # self.new_round()
-            return self._get_reward(), True
+            reward = self._get_reward()
+            self.new_round()
+            return reward, True
 
         else:
             self.player.deal_one_card(self.cardpool)
@@ -364,8 +369,9 @@ class BlackJackEnv:
                 self.state.earned += self.earned_current_turn
                 self.player.money += self.earned_current_turn
                 self.history.append(self.state.lost)
+                reward = self._get_reward()
                 self.new_round()
-                return self._get_reward(), True
+                return reward, True
 
             return self._get_reward(), False
 
