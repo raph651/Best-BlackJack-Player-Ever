@@ -95,6 +95,7 @@ class MCT:
                     break
                 cur = self.get_child(cur, tuple(self.env.state.input()), action)
 
+        self.env = temp_env
         self.dataset.add(root)
 
 
@@ -150,6 +151,7 @@ def simulate(new_model, training_itr, deck_num, search_amount, explore_constant)
         tree.env.new_round()
         root = Node(state=tree.env.state.input(), parent=None, prior_action=None, network=tree.network)
         if root.state not in tree.states:
+            print('start')
             tree.search(root, 40)
         tree.search(root, 1)
         print("ga")

@@ -264,6 +264,9 @@ class BlackJackEnv:
         """reset and then start a new round, prompt the player to make a bet if interactive,
         otherwise, use player.make_bet(bet) for a specific bet
         """
+        if self.cardpool.N < 10:
+            self.cardpool.reset()
+
         self.dealer.reset_round()
         self.player.reset_round()
         # deal one card to the dealer, and reveal the card
@@ -273,7 +276,7 @@ class BlackJackEnv:
 
         revealed = self.dealer.revealed
         hands_sum = self.player.hands_sum
-        turn = 0
+        turn = 0 if not self.state else self.state.turn
         earned = 0 if not self.state else self.state.earned
         if default_bet:
             bet = 50
@@ -344,7 +347,7 @@ class BlackJackEnv:
             self.state.earned += self.earned_current_turn
 
             self.history.append(self.state.lost)
-            self.new_round()
+            # self.new_round()
             return self._get_reward(), True
 
         else:
