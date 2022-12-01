@@ -4,7 +4,6 @@ import env
 
 import numpy as np
 import torch
-import torch.nn as nn
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 
@@ -12,6 +11,7 @@ from torch.utils.data import DataLoader
 class Dset(Dataset):
     def __init__(self):
         self.data = []
+        self.new_count = 0
 
     def __len__(self):
         return len(self.data)
@@ -63,13 +63,13 @@ class MCT:
             root.child.parent = root
         else:
             root.child = Node(state, root, action, self.network)
-            self.states[state] = root.child
+            self.states[tuple(state)] = root.child
             self.search(root.child, self.search_amount)
         return root.child
 
     def get_good_action(self, root):
         PUCT_alg = lambda action: self.explore_constant * root.P[action] * (sum(root.N))**0.5 / (1 + root.N[action])
-        metric = lambda action: PUCT_alg(action) + self.network(root.state, action)[0][0]#take value from the (value, prob) pair]
+        metric = lambda action: PUCT_alg(action) + self.network(root.state)[0][0]#take value from the (value, prob) pair]
         return max(self.env.player.actions, key=metric)
 
     def search(self, root, search_amount):
@@ -90,6 +90,7 @@ class MCT:
                 self.backtrack(cur, reward, root)
         self.dataset.add(root)
 
+
     def backtrack(self, cur, reward, root):
         while cur.state != root.state:
             parent = cur.parent
@@ -101,17 +102,22 @@ class MCT:
             cur = parent
 
     def train(self):
-        loader = DataLoader(self.dataset, batch_size=10, shuffle=True)
-        for node in loader:
-            # value prediction and prob prediction
-            v, p = self.network(torch.FloatTensor(node.state))
-            q, pi = node.Q, node.P
+        #trim old data and restart counting
+        self.dataset.data = self.dataset.data[-1000:]
+        self.dataset.new_count = 0
 
-            self.optimizer.zero_grad()
-            # maybe we kindda require only using state as input for this criterion to work
-            loss = self.criterion(v.numpy(), np.array(p), q.numpy(), np.array(pi))
-            loss.backward()
-            self.optimizer.step()
+        loader = DataLoader(self.dataset, batch_size=20, shuffle=True)
+        for epoch in range(5):
+            for node in loader:
+                # value prediction and prob prediction
+                v, p = self.network(torch.FloatTensor(node.state))
+                q, pi = node.Q, node.P
+
+                self.optimizer.zero_grad()
+                # maybe we kindda require only using state as input for this criterion to work
+                loss = self.criterion(v.numpy(), np.array(p), q.numpy(), np.array(pi))
+                loss.backward()
+                self.optimizer.step()
 
 
 def simulate(new_model, training_itr, deck_num, search_amount, explore_constant):
@@ -136,11 +142,13 @@ def simulate(new_model, training_itr, deck_num, search_amount, explore_constant)
         tree.env.new_round()
         root = Node(state=tree.env.state.input, parent=None, prior_action=None, network=tree.network)
         tree.search(root, 1)
+        if tree.dataset.new_count >= 200 and len(tree.dataset) >= 400:
+            tree.train()
 
     torch.save({
         'model_state_dict': network.state_dict(),
         'optimizer_state_dict': optimizer.state_dict()
-    }, PATH + str(j))
+    }, PATH)
     with open('data.pkl', 'wb') as file:
         pickle.dump(tree.dataset.data, file)
 
