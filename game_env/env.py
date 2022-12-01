@@ -98,9 +98,7 @@ class Player:
         self, initial_money=1000,
     ):
         self.money = initial_money
-        self.actions = ["Hit", "Double", "Stand"]
-        self.double = False
-
+        self.actions = [0,1,2]
         self.hands = []  # current cards
         self.hands_sum = [0]  # current possibilities of card sums
 
@@ -110,12 +108,9 @@ class Player:
         self.hands = []
         self.hands_sum = [0]
         self.bet = None
-        self.double = False
         return
 
     def get_actions(self):
-        if self.double:
-            return self.actions[:1] + self.actions[2:]
         return self.actions
 
     def random_actions(self):
@@ -132,7 +127,6 @@ class Player:
         """given a player's choice on bet, proceed
         """
         self.bet = bet
-        self.money -= bet
 
     def choose_bet(self):
         """prompt the player to make a bet choice
@@ -176,8 +170,7 @@ class Player:
         else:
             self.hands_sum = [i + int(hand) for i in self.hands_sum]
 
-        if len(self.hands_sum) >= 3:
-            self.hands_sum.pop()
+        self.hands_sum = [i for i in self.hands_sum if i<=21]
 
     def best_hand(self):
         """return the best valid hand_sum that is less than 21 and closest to 21
@@ -213,7 +206,6 @@ class Dealer:
         self.revealed = None
         self.hands = []
         self.hands_sum = [0]
-        self.money = 0
         self.threshold = threshold
 
     def reset_round(self):
@@ -290,6 +282,11 @@ class BlackJackState:
             self.lost,
         )
 
+    def input(self):
+        revealed = 10 if self.revealed in ['J','Q','K'] else int(self.revealed)
+        hands_sum = self.hands_sum.copy()*2 if len(self.hands_sum)==1 else self.hands_sum.copy()
+        return self.cardleft+[revealed]+hands_sum
+
 
 class BlackJackEnv:
     def __init__(self, n_deck=6, player_num=1):
@@ -305,6 +302,7 @@ class BlackJackEnv:
 
         self.state = None
         self.earned_current_turn = 0
+        self.history =[]
 
     def reset_env(self):
         """only reset the environment, call new_round to start a new round and return the new state
@@ -313,8 +311,10 @@ class BlackJackEnv:
         self.dealer.reset_round()
         self.player.reset_round()
         self.state = None
+        self.history=[]
+        
 
-    def new_round(self):
+    def new_round(self,default_bet=True):
         """reset and then start a new round, prompt the player to make a bet if interactive,
         otherwise, use player.make_bet(bet) for a specific bet
         """
@@ -328,8 +328,12 @@ class BlackJackEnv:
         revealed = self.dealer.revealed
         hands_sum = self.player.hands_sum
         turn = 0
-        earned = 0
-        bet = self.player.choose_bet()
+        earned = 0 if not self.state else self.state.earned
+        if default_bet:
+            bet = 50
+            self.player.make_bet(bet)
+        else:
+            bet = self.player.choose_bet()
         # bet = self.player.make_bet(bet)  if not interactive
         lost = None
         self.state = BlackJackState(
@@ -347,6 +351,7 @@ class BlackJackEnv:
                 print(f"{card}: {left}", end=" ," + "\n" * (card == "7"))
             print(f"\nThe dealer has one revealed card : {self.dealer.revealed}")
             print(f"\nCurrent player has hands: {self.player.hands}")
+            print(f"\nCurrent player has money: {self.player.money}")
         else:
             print("use env.new_round to start a new round")
 
@@ -357,8 +362,26 @@ class BlackJackEnv:
         self.state.turn += 1
         self.earned_current_turn = 0
 
-        if action == "Stand":
-            # if action is stand, the dealer picks cards based on the default policy
+        if action == 0 or action ==1:
+            # if the action is double, dealt one card
+            if action ==1:
+                self.player.double = True
+                self.state.bet *= 2
+                self.player.deal_one_card(self.cardpool)
+                self.state.hands_sum = self.player.hands_sum.copy()
+
+                # check if player bust
+                if not self.state.hands_sum:
+                    self.state.lost = -1
+                    self.earned_current_turn = self.state.bet * -1
+                    self.dealer.deal_one_card(self.cardpool)
+                    self.state.earned+=self.earned_current_turn
+                    self.player.money+=self.earned_current_turn
+                    
+                    self.history.append(self.state.lost)
+                    return self.state.copy(), self._get_reward(), True, {}
+
+            # then the dealer picks cards based on the default policy
             self.dealer.make_action(self.cardpool)
             dealer_hand_sum = self.dealer.best_hand()
             player_hand_sum = self.player.best_hand()
@@ -366,7 +389,7 @@ class BlackJackEnv:
             # if dealer bust, the player wins because player doesn't bust
             if dealer_hand_sum > 21:
                 self.state.lost = 1
-                self.earned_current_turn = self.state.bet * 2
+                self.earned_current_turn = self.state.bet
             else:
                 if dealer_hand_sum == player_hand_sum:
                     self.state.lost = 0
@@ -375,30 +398,31 @@ class BlackJackEnv:
                     self.earned_current_turn = self.state.bet * -1
                 else:
                     self.state.lost = 1
-                    self.earned_current_turn = self.state.bet * 2
-                    self.player.money += self.earned_current_turn
+                    self.earned_current_turn = self.state.bet
+
+            self.player.money+=self.earned_current_turn
             self.state.earned+=self.earned_current_turn
+
+            self.history.append(self.state.lost)
             return self.state, self._get_reward(), True, {}
 
-        if action == "Double":
-            self.player.double = True
-            self.player.money-=self.state.bet
-            self.state.bet *= 2
+        else:
+            self.player.deal_one_card(self.cardpool)
+            self.state.hands_sum = self.player.hands_sum.copy()
 
-        self.player.deal_one_card(self.cardpool)
-        self.state.hands_sum = self.player.hands_sum.copy()
+            # if all the hands_sum has bigger than 21 values, then the player loses and round ends
+            # otherwise, continue the game
+            if not self.player.hands_sum:
+                self.state.lost = -1
+                self.earned_current_turn = self.state.bet * -1
+                self.dealer.deal_one_card(self.cardpool)
 
-        # if all the hands_sum has bigger than 21 values, then the player loses and round ends
-        # otherwise, continue the game
-        if all([n > 21 for n in self.player.hands_sum]):
-            self.state.lost = -1
-            self.earned_current_turn = self.state.bet * -1
-            self.dealer.deal_one_card(self.cardpool)
-            self.state.earned+=self.earned_current_turn
-            
-            return self.state.copy(), self._get_reward(), True, {}
+                self.state.earned+=self.earned_current_turn
+                self.player.money+=self.earned_current_turn
+                self.history.append(self.state.lost)
+                return self.state.copy(), self._get_reward(), True, {}
 
-        return self.state.copy(), self._get_reward(), False, {}
+            return self.state.copy(), self._get_reward(), False, {}
 
     def _get_reward(self):
         return
