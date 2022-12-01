@@ -18,7 +18,7 @@ class Dset(Dataset):
         return len(self.data)
 
     def __getitem__(self, item):
-        return torch.tensor(self.data[item].state),torch.tensor(self.data[item].Q),torch.tensor(self.data[item].P)
+        return torch.tensor(self.data[item]['state']).type(torch.FloatTensor),torch.tensor(self.data[item]['Q']).type(torch.FloatTensor),torch.tensor(self.data[item]['P']).type(torch.FloatTensor)
 
     def add(self, node):
         self.data.append(node)
@@ -105,7 +105,7 @@ class MCT:
         if root.state[-1] > 21 or root.state[-2] > 21 or root.state[-3] > 21:
             print(root.state)
             input()
-        self.dataset.add(root.state)
+        self.dataset.add({'state':root.state,'Q':root.Q,'P':root.P})
 
     def run(self, root):
         if root.state and root.state not in self.states:
@@ -139,17 +139,19 @@ class MCT:
         self.dataset.new_count = 0
 
         loader = DataLoader(self.dataset, batch_size=20, shuffle=True)
+        print('training')
         for epoch in range(5):
             for state,q,pi in loader:
                 # value prediction and prob prediction
-                try:
-                    node = self.states[state]
-                except:
-                    print("hey")
-                    print(state)
-                    input()
-                p,v = self.network(torch.FloatTensor(state))
-
+                #try:
+                #    node = self.states[state]
+                #except:
+                #    print("hey")
+                #    print(state)
+                #    input()
+                print(state.shape,q.shape,pi.shape)
+                p,v = self.network(state)
+                
                 self.optimizer.zero_grad()
                 # maybe we kindda require only using state as input for this criterion to work
                 loss = self.criterion(p,v,q,pi)
@@ -182,7 +184,8 @@ def simulate(new_model, training_itr, deck_num, search_amount, explore_constant)
         root = Node(state=tree.env.state.input(), parent=None, prior_action=None, network=tree.network)
 
         tree.run(root)
-        if tree.dataset.new_count >= 200 and len(tree.dataset) >= 400:
+        print(len(tree.dataset.data), ' dataset length')
+        if tree.dataset.new_count >= 100 and len(tree.dataset) >= 150:
             tree.train()
             print(network.state_dict())
 
