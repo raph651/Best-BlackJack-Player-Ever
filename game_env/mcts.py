@@ -26,7 +26,7 @@ class Dset(Dataset):
 
 class Node:
     def __init__(self, state, parent, prior_action, network, child=None):
-        self.state = state
+        self.state = tuple(state)
         self.parent = parent
         self.prior_action = prior_action
         self.child = child
@@ -68,13 +68,17 @@ class MCT:
             root.child.parent = root
         else:
             root.child = Node(state, root, action, self.network)
-            self.states[tuple(state)] = root.child
+            self.states[state] = root.child
             self.search(root.child, self.search_amount)
         return root.child
 
     def get_good_action(self, root):
         PUCT_alg = lambda action: self.explore_constant * root.P[action] * (sum(root.N))**0.5 / (1 + root.N[action])
-        metric = lambda action: PUCT_alg(action) + self.network(torch.FloatTensor([root.state]))[0][0]#take value from the (value, prob) pair]
+        def metric(action):
+            print(self.network(torch.FloatTensor([root.state]))[1])
+            return PUCT_alg(action) + self.network(torch.FloatTensor([root.state]))[1][0][0]
+        #metric = lambda action: PUCT_alg(action) + self.network(torch.FloatTensor([root.state]))[1][0][0]#take value from the (value, prob) pair]
+
         return max(self.env.player.actions, key=metric)
 
     def search(self, root, search_amount):
@@ -88,7 +92,7 @@ class MCT:
             done, reward = temp_env.step(action)
             while not done:
                 # expand the search until done
-                cur = self.get_child(cur, temp_env.state.input(), action)
+                cur = self.get_child(cur, tuple(temp_env.state.input()), action)
                 action = self.get_good_action(cur)
                 done, reward = temp_env.step(action)
 
