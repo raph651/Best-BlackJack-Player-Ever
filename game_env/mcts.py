@@ -85,18 +85,16 @@ class MCT:
             # reset random seed here?
             # code to add maybe?
             self.env = deepcopy(temp_env)
-
             while True:
                 action = self.get_good_action(cur)
-                print(tuple(temp_env.state.input()))
-                done, reward = temp_env.step(action)
+                print(tuple(self.env.state.input()))
+                done, reward = self.env.step(action)
                 if done:
                     print('hey')
                     self.backtrack(cur, reward, root)
                     break
-                cur = self.get_child(cur, tuple(temp_env.state.input()), action)
+                cur = self.get_child(cur, tuple(self.env.state.input()), action)
 
-        self.env = temp_env
         self.dataset.add(root)
 
 
@@ -148,9 +146,14 @@ def simulate(new_model, training_itr, deck_num, search_amount, explore_constant)
             tree.dataset.data = pickle.load(file)
 
     for _ in range(training_itr):
+        print(_)
         tree.env.new_round()
         root = Node(state=tree.env.state.input(), parent=None, prior_action=None, network=tree.network)
+        if root.state not in tree.states:
+            tree.search(root, 40)
         tree.search(root, 1)
+        print("ga")
+        input()
         if tree.dataset.new_count >= 200 and len(tree.dataset) >= 400:
             tree.train()
 
