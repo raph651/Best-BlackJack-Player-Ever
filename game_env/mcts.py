@@ -18,7 +18,7 @@ class Dset(Dataset):
         return len(self.data)
 
     def __getitem__(self, item):
-        return self.data[item]
+        return torch.tensor(self.data[item].state),torch.tensor(self.data[item].Q),torch.tensor(self.data[item].P)
 
     def add(self, node):
         self.data.append(node)
@@ -75,7 +75,7 @@ class MCT:
     def get_good_action(self, root):
         PUCT_alg = lambda action: self.explore_constant * root.P[action] * (sum(root.N))**0.5 / (1 + root.N[action])
         def metric(action):
-            return PUCT_alg(action) + self.network(torch.FloatTensor([root.state]))[1][0][0]
+            return PUCT_alg(action) + self.network(torch.FloatTensor([root.state]))[1][0].item()
         #metric = lambda action: PUCT_alg(action) + self.network(torch.FloatTensor([root.state]))[1][0][0]#take value from the (value, prob) pair]
 
         return max(self.env.player.actions, key=metric)
@@ -140,7 +140,7 @@ class MCT:
 
         loader = DataLoader(self.dataset, batch_size=20, shuffle=True)
         for epoch in range(5):
-            for state in loader:
+            for state,q,pi in loader:
                 # value prediction and prob prediction
                 try:
                     node = self.states[state]
@@ -148,19 +148,19 @@ class MCT:
                     print("hey")
                     print(state)
                     input()
-                v, p = self.network(torch.FloatTensor(state))
-                q, pi = node.Q, node.P
+                p,v = self.network(torch.FloatTensor(state))
 
                 self.optimizer.zero_grad()
                 # maybe we kindda require only using state as input for this criterion to work
-                loss = self.criterion(v.numpy(), np.array(p), q.numpy(), np.array(pi))
+                loss = self.criterion(p,v,q,pi)
                 loss.backward()
+                print(loss.item)
                 self.optimizer.step()
 
 
 def simulate(new_model, training_itr, deck_num, search_amount, explore_constant):
     def criterion(v, p, q, pi):
-        loss = (v-q)**2 + pi * np.log(p)
+        loss = (v-q)**2 + pi * torch.log(p)
         return loss
 
     network = qnet.QNet()
