@@ -38,8 +38,6 @@ class Node:
         self.Q = [0]*3
         # action prob
         # fill by probability returned by neural net, take only prob
-        print(torch.FloatTensor([state]))
-        print(network(torch.FloatTensor([state])))
         # add another indexing [0] because the output p has shape [1,3]
         # after adding, it has shape [3]
         self.P = network(torch.FloatTensor([state]))[0][0]
@@ -75,7 +73,6 @@ class MCT:
     def get_good_action(self, root):
         PUCT_alg = lambda action: self.explore_constant * root.P[action] * (sum(root.N))**0.5 / (1 + root.N[action])
         def metric(action):
-            print(self.network(torch.FloatTensor([root.state]))[1])
             return PUCT_alg(action) + self.network(torch.FloatTensor([root.state]))[1][0][0]
         #metric = lambda action: PUCT_alg(action) + self.network(torch.FloatTensor([root.state]))[1][0][0]#take value from the (value, prob) pair]
 
@@ -88,16 +85,18 @@ class MCT:
             # reset random seed here?
             # code to add maybe?
             self.env = deepcopy(temp_env)
-            action = self.get_good_action(cur)
-            done, reward = temp_env.step(action)
-            while not done:
-                # expand the search until done
-                cur = self.get_child(cur, tuple(temp_env.state.input()), action)
-                action = self.get_good_action(cur)
-                done, reward = temp_env.step(action)
 
-            if done:
-                self.backtrack(cur, reward, root)
+            while True:
+                action = self.get_good_action(cur)
+                print(tuple(temp_env.state.input()))
+                done, reward = temp_env.step(action)
+                if done:
+                    print('hey')
+                    self.backtrack(cur, reward, root)
+                    break
+                cur = self.get_child(cur, tuple(temp_env.state.input()), action)
+
+        self.env = temp_env
         self.dataset.add(root)
 
 

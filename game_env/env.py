@@ -246,7 +246,7 @@ class BlackJackState:
         )
 
     def input(self):
-        revealed = 10 if self.revealed in ['J','Q','K'] else int(self.revealed)
+        revealed = 1 if self.revealed == 'A' else (10 if self.revealed in ['J','Q','K'] else int(self.revealed))
         hands_sum = self.hands_sum.copy()*2 if len(self.hands_sum)==1 else self.hands_sum.copy()
         return self.cardleft+[revealed]+hands_sum
 
