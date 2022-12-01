@@ -2,6 +2,7 @@ import pickle
 import qnet
 import env
 
+import matplotlib.pyplot as plt
 from copy import deepcopy
 import numpy as np
 import torch
@@ -81,7 +82,7 @@ class MCT:
         return max(self.env.player.actions, key=metric)
 
     def search(self, root):
-        print('search', self.env.state.input())
+        # print('search', self.env.state.input())
         temp_env = self.env
         for _ in range(self.search_amount):
             # reset random seed here?
@@ -90,7 +91,7 @@ class MCT:
             cur = root
             while True:
                 action = self.get_good_action(cur)
-                # print(tuple(self.env.state.input()))
+                # print(tuple(self.env.state.input()), action)
                 reward, done = self.env.step(action)
                 if done:
                     # symbolic child just for backtrack purpose
@@ -100,6 +101,7 @@ class MCT:
                     self.backtrack(cur, reward, root)
                     break
                 cur = self.get_child(cur, tuple(self.env.state.input()), action)
+            # input("end run")
 
         self.env = temp_env
         if root.state[-1] > 21 or root.state[-2] > 21 or root.state[-3] > 21:
@@ -117,7 +119,7 @@ class MCT:
             reward, done = self.env.step(action)
             if done:
                 self.backtrack(cur, reward, root)
-                break
+                return reward
             cur = self.get_child(cur, tuple(self.env.state.input()), action)
 
     def backtrack(self, cur, reward, root):
@@ -134,6 +136,7 @@ class MCT:
                 break
 
     def train(self):
+        loss_list = []
         #trim old data and restart counting
         self.dataset.data = self.dataset.data[-1000:]
         self.dataset.new_count = 0
@@ -156,14 +159,27 @@ class MCT:
                 # maybe we kindda require only using s  tate as input for this criterion to work
                 loss = self.criterion(p,v,q,pi)
                 loss.backward()
-                print(loss.item)
                 self.optimizer.step()
+                print("loss: ", loss.item())
+                loss_list.append(loss)
+        return loss_list
 
+def plot(reward, mv_reward, losses):
+    # plot
+    plt.title("Line graph")
+    plt.xlabel("Iteration")
+    plt.ylabel("reward")
+    plt.plot(reward, label="reward")
+    plt.plot(mv_reward, label="mv_reward")
+    plt.figure()
+    plt.plot(losses, label='losses')
+    plt.legend()
+    plt.show()
 
 def simulate(new_model, training_itr, deck_num, search_amount, explore_constant):
     def criterion(v, p, q, pi):
-        loss = (v-q.dot(pi))**2 + pi * torch.log(p)
-        return loss
+        loss = (v-torch.sum(q*pi, dim=-1).unsqueeze(-1))**2 - torch.sum(pi * torch.log(p), dim=-1).unsqueeze(-1)
+        return torch.sum(loss)
 
     network = qnet.QNet()
     optimizer = torch.optim.Adam(network.parameters(), lr=0.01, weight_decay=0.01)
@@ -178,16 +194,29 @@ def simulate(new_model, training_itr, deck_num, search_amount, explore_constant)
         with open('data.pkl', 'rb') as file:
             tree.dataset.data = pickle.load(file)
 
+    losses = []
+    rewards = []
+    mv_rewards = [0]
+    exp_factor = 0.2
     for _ in range(training_itr):
         print("itr: ", _)
         tree.env.new_round()
         root = Node(state=tree.env.state.input(), parent=None, prior_action=None, network=tree.network)
 
-        tree.run(root)
-        print(len(tree.dataset.data), ' dataset length')
-        if tree.dataset.new_count >= 100 and len(tree.dataset) >= 150:
-            tree.train()
-            print(network.state_dict())
+        reward = tree.run(root)
+        rewards.append(reward)
+        mv_reward = reward*exp_factor + mv_rewards[-1]*(1-exp_factor)
+        mv_rewards.append(mv_reward)
+        print("cardleft: ", tree.env.state.input())
+        print("reward: ", reward, "  mv_reward", mv_reward)
+
+        #print(len(tree.dataset.data), ' dataset length')
+        if tree.dataset.new_count >= 1000 and len(tree.dataset) >= 200:
+            loss_list = tree.train()
+            losses.extend(loss_list)
+    plot(rewards, mv_rewards, losses)
+            # print(network.state_dict())
+
 
     torch.save({
         'model_state_dict': network.state_dict(),
@@ -197,4 +226,4 @@ def simulate(new_model, training_itr, deck_num, search_amount, explore_constant)
         pickle.dump(tree.dataset.data, file)
 
 if __name__ == '__main__':
-    simulate(new_model=0, training_itr=50, deck_num=6, search_amount=100, explore_constant=1)
+    simulate(new_model=1, training_itr=80, deck_num=6, search_amount=100, explore_constant=1)
