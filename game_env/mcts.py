@@ -2,6 +2,7 @@ import pickle
 import qnet
 import env
 
+from copy import deepcopy
 import numpy as np
 import torch
 from torch.utils.data import Dataset
@@ -39,7 +40,9 @@ class Node:
         # fill by probability returned by neural net, take only prob
         print(torch.FloatTensor([state]))
         print(network(torch.FloatTensor([state])))
-        self.P = network(torch.FloatTensor([state]))[1]
+        # add another indexing [0] because the output p has shape [1,3]
+        # after adding, it has shape [3]
+        self.P = network(torch.FloatTensor([state]))[0][0]
 
 
 class MCT:
@@ -71,7 +74,7 @@ class MCT:
 
     def get_good_action(self, root):
         PUCT_alg = lambda action: self.explore_constant * root.P[action] * (sum(root.N))**0.5 / (1 + root.N[action])
-        metric = lambda action: PUCT_alg(action) + self.network(root.state)[0][0]#take value from the (value, prob) pair]
+        metric = lambda action: PUCT_alg(action) + self.network(torch.FloatTensor([root.state]))[0][0]#take value from the (value, prob) pair]
         return max(self.env.player.actions, key=metric)
 
     def search(self, root, search_amount):
@@ -80,7 +83,7 @@ class MCT:
         for _ in range(search_amount):
             # reset random seed here?
             # code to add maybe?
-            self.env = temp_env.copy()
+            self.env = deepcopy(temp_env)
             action = self.get_good_action(cur)
             done, reward = temp_env.step(action)
             while not done:

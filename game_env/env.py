@@ -1,4 +1,4 @@
-from logging import raiseExceptions
+import torch
 from random import randint
 from collections import Counter
 
@@ -54,43 +54,6 @@ class CardPool:
         self.cardCounter[card] -= 1
 
         return card
-
-    def test(self):
-        """randomly pick 100 cards for test
-        record the picked cards and check the number of each card in the pool
-        """
-        pickN = 100
-        print("=" * 40)
-        print(f"Testing for random pick {pickN} cards")
-        cardpicked = []
-        for _ in range(pickN):
-            cardpicked.append(self.pick())
-        pickedCounter = Counter(cardpicked)
-        print(
-            "picked counter: \n",
-            [(card, pickedCounter[card]) for card in self.idxs.values()],
-        )
-        print(
-            "card pool counter: \n",
-            [(card, self.cardCounter[card]) for card in self.idxs.values()],
-        )
-        print("card left array: \n", self.cardLeft)
-        result = self.test_count()
-        print("test result :", result)
-        print("=" * 40)
-
-    def test_count(self):
-        """test if the number of each kind of card match the card Counter"""
-        testCounter = Counter(
-            [self.cardMapping(self.mapping.get(i, i)) for i in range(0, self.N)]
-        )
-        # check if match the self.cardCounter dict
-        if any([testCounter[i] != self.cardCounter[i] for i in self.idxs.values()]):
-            return False
-        # check if match the self.cardLeft state array
-        if any([testCounter[self.idxs[i + 1]] != self.cardLeft[i] for i in range(13)]):
-            return False
-        return True
 
 
 class Player:
@@ -287,7 +250,6 @@ class BlackJackState:
         hands_sum = self.hands_sum.copy()*2 if len(self.hands_sum)==1 else self.hands_sum.copy()
         return self.cardleft+[revealed]+hands_sum
 
-
 class BlackJackEnv:
     def __init__(self, n_deck=6, player_num=1):
 
@@ -339,7 +301,6 @@ class BlackJackEnv:
         self.state = BlackJackState(
             self.cardpool.cardLeft, revealed, hands_sum, turn, earned, bet, lost
         )
-        return self.state.copy()
 
     def get_actions(self):
         return self.player.get_actions()
@@ -355,14 +316,11 @@ class BlackJackEnv:
         else:
             print("use env.new_round to start a new round")
 
-    def check_game_end(self):
-        return
-
     def step(self, action):
         self.state.turn += 1
         self.earned_current_turn = 0
 
-        if action == 0 or action ==1:
+        if action == 1 or action ==2:
             # if the action is double, dealt one card
             if action ==1:
                 self.player.double = True
@@ -379,7 +337,7 @@ class BlackJackEnv:
                     self.player.money+=self.earned_current_turn
                     
                     self.history.append(self.state.lost)
-                    return self.state.copy(), self._get_reward(), True, {}
+                    return self._get_reward(), True
 
             # then the dealer picks cards based on the default policy
             self.dealer.make_action(self.cardpool)
@@ -404,7 +362,7 @@ class BlackJackEnv:
             self.state.earned+=self.earned_current_turn
 
             self.history.append(self.state.lost)
-            return self.state, self._get_reward(), True, {}
+            return self._get_reward(), True
 
         else:
             self.player.deal_one_card(self.cardpool)
@@ -420,10 +378,10 @@ class BlackJackEnv:
                 self.state.earned+=self.earned_current_turn
                 self.player.money+=self.earned_current_turn
                 self.history.append(self.state.lost)
-                return self.state.copy(), self._get_reward(), True, {}
+                return self._get_reward(), True
 
-            return self.state.copy(), self._get_reward(), False, {}
-
+            return self._get_reward(), False
+    
     def _get_reward(self):
-        return
+        return self.state.lost
 
