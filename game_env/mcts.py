@@ -81,7 +81,7 @@ class MCT:
         return max(self.env.player.actions, key=metric)
 
     def search(self, root):
-        # print('search', self.env.state.input())
+        print('search', self.env.state.input())
         temp_env = self.env
         for _ in range(self.search_amount):
             # reset random seed here?
@@ -153,7 +153,7 @@ class MCT:
                 p,v = self.network(state)
                 
                 self.optimizer.zero_grad()
-                # maybe we kindda require only using state as input for this criterion to work
+                # maybe we kindda require only using s  tate as input for this criterion to work
                 loss = self.criterion(p,v,q,pi)
                 loss.backward()
                 print(loss.item)
@@ -162,7 +162,7 @@ class MCT:
 
 def simulate(new_model, training_itr, deck_num, search_amount, explore_constant):
     def criterion(v, p, q, pi):
-        loss = (v-q)**2 + pi * torch.log(p)
+        loss = (v-q.dot(pi))**2 + pi * torch.log(p)
         return loss
 
     network = qnet.QNet()

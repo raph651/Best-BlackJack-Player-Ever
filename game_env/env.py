@@ -312,7 +312,9 @@ class BlackJackEnv:
 
         if action == 1 or action == 2:
             # if the action is double, dealt one card
+            double = 1
             if action == 1:
+                double=2
                 self.state.bet *= 2
                 self.player.deal_one_card(self.cardpool)
                 self.state.hands_sum = self.player.hands_sum.copy()
@@ -328,7 +330,7 @@ class BlackJackEnv:
                     self.history.append(self.state.lost)
                     reward = self._get_reward()
                     self.new_round()
-                    return reward, True
+                    return reward*double, True
 
             # then the dealer picks cards based on the default policy
             self.dealer.make_action(self.cardpool)
@@ -353,7 +355,7 @@ class BlackJackEnv:
             self.history.append(self.state.lost)
             reward = self._get_reward()
             self.new_round()
-            return reward, True
+            return reward*double, True
 
         else:
             self.player.deal_one_card(self.cardpool)
