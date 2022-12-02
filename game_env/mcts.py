@@ -78,7 +78,7 @@ class MCT:
         PUCT_alg = lambda action: self.explore_constant * root.P[action] * (sum(root.N))**0.5 / (1 + root.N[action])
 
         def metric(action):
-            return PUCT_alg(action) + self.network(torch.FloatTensor([root.state]))[1][0].item()
+            return PUCT_alg(action) + root.Q[action] # self.network(torch.FloatTensor([root.state]))[1][0].item()
 
         return max(self.env.player.actions, key=metric)
 
