@@ -72,6 +72,7 @@ class Player:
         self.hands = []
         self.hands_sum = [0]
         self.bet = None
+        self.money = 1000
         return
 
     def get_actions(self):
@@ -187,7 +188,7 @@ class Dealer:
 
 
 class BlackJackState:
-    def __init__(self, cardleft, revealed, hands_sum, turn, earned, bet, lost):
+    def __init__(self, cardleft, revealed, hands_sum, turn, earned, bet, lost,bet_input):
         self.cardleft = cardleft
         self.revealed = revealed
         self.hands_sum = hands_sum
@@ -199,6 +200,8 @@ class BlackJackState:
         self.bet = bet
         # whether the game has lost: 1 -player wins, -1 -dealer wins, 0 - draw
         self.lost = lost
+        # bet_input variable
+        self.bet_input = bet_input
 
     def copy(self):
         return BlackJackState(
@@ -209,6 +212,7 @@ class BlackJackState:
             self.earned,
             self.bet,
             self.lost,
+            self.bet_input,
         )
 
     def input(self) ->List:
@@ -231,7 +235,6 @@ class BlackJackEnv:
 
         self.state = None
         self.earned_current_turn = 0
-        #self.history = []
         self.default_bet = default_bet
 
     def reset_env(self):
@@ -241,11 +244,6 @@ class BlackJackEnv:
         self.dealer.reset_round()
         self.player.reset_round()
         self.state = None
-        #self.history = []
-
-    def get_expected_rewards(self):
-        return
-
         
     def new_round(self):
         """reset and then start a new round, prompt the player to make a bet if interactive,
@@ -257,14 +255,9 @@ class BlackJackEnv:
         self.dealer.reset_round()
         self.player.reset_round()
 
-        # if make default bet, make 50
-        # else random sample 20 possibilities for new round initial states, use these states to predict
-        # the expected value of rewrds
-        if self.default_bet:
-            bet = 50
-            self.player.make_bet(bet)
-        else:
-            expected_rewards = self.get_expected_rewards()       
+        # change bet_input
+        bet_input = self.cardpool.cardLeft.copy()
+
         # deal one card to the dealer, and reveal the card
         # deal two cards to the player
         self.dealer.start_round(self.cardpool)
@@ -275,11 +268,11 @@ class BlackJackEnv:
         turn = 0 if not self.state else self.state.turn
         earned = 0 if not self.state else self.state.earned
 
-            #bet = self.player.choose_bet()
-        # bet = self.player.make_bet(bet)  if not interactive
         lost = None
+        # bet set to be 1
+        bet = 1
         self.state = BlackJackState(
-            self.cardpool.cardLeft, revealed, hands_sum, turn, earned, bet, lost
+            self.cardpool.cardLeft, revealed, hands_sum, turn, earned, bet, lost,bet_input
         )
 
     def get_actions(self):
