@@ -43,4 +43,4 @@ class QNet(nn.Module):
         )
     def forward(self,x):
         shared = self.encoder(x)
-        return self.prob_decoder(shared), 2*self.value_decoder(shared)
+        return self.prob_decoder(shared), self.value_decoder(shared)
