@@ -1,4 +1,6 @@
 import pickle
+
+#from matplotlib.font_manager import _Weight
 import qnet
 import env
 
@@ -31,7 +33,7 @@ class Dset(Dataset):
     def __getitem__(self, item):
         return (
             torch.FloatTensor(self.samples[item]["state"]),
-            torch.FloatTensor([self.samples[item]["z"]]),
+            torch.FloatTensor(self.samples[item]["q"]),
             torch.FloatTensor(self.samples[item]["pi"]),
         )
 
@@ -171,11 +173,11 @@ class MCT:
         self.dataset.new_count = 0
         self.dataset.sample_data()
         for epoch in range(2):
-            for state, z, pi in self.loader:
+            for state, q, pi in self.loader:
                 p, v = self.network(state)
                 self.optimizer.zero_grad()
                 # maybe we kindda require only using s  tate as input for this criterion to work
-                loss = self.criterion(p, v, z, pi)
+                loss = self.criterion(p, v, q, pi)
                 loss.backward()
 
                 self.optimizer.step()
@@ -226,14 +228,15 @@ def plot(reward, mv_reward, losses, test_earned):
 
 
 def simulate(new_model, training_itr, deck_num, search_amount, explore_constant,generate_plot):
-    def criterion(p, v, z, pi):
-        weight=F.softmax(torch.randn(2),dim=-1)
-        loss = weight[0]*((v-z)**2).sum() - weight[1]*(pi * torch.log(p+0.01)).sum(-1).sum()
-        return loss
+    def criterion(p, v, q, pi):
+        loss = (v-torch.sum(q*pi, dim=-1).unsqueeze(-1))**2 - torch.sum(pi * torch.log(p), dim=-1).unsqueeze(-1)
+        return torch.sum(loss)
 
     network = qnet.QNet()
-    optimizer = torch.optim.Adam(network.parameters(), lr=0.00025, weight_decay=1e-4)
-    
+    optimizer = torch.optim.Adam(network.parameters(), lr=0.005, weight_decay=1e-4)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size = 24, gamma=0.8)
+
+
     tree = MCT(network, optimizer, criterion)
     tree.reset(deck_num, search_amount, explore_constant)
 
@@ -246,6 +249,7 @@ def simulate(new_model, training_itr, deck_num, search_amount, explore_constant,
         checkpoint = torch.load(PATH)
         network.load_state_dict(checkpoint["model_state_dict"])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
         # with open(newData, 'rb') as file:
         #    tree.states, tree.dataset,last_test = pickle.load(file)
         with open(newData, "rb") as file:
@@ -282,6 +286,7 @@ def simulate(new_model, training_itr, deck_num, search_amount, explore_constant,
             loss_list, earned = tree.train()
             losses.extend(loss_list)
             test_earned.extend(earned)
+            scheduler.step()
     cur_test = sum(tree.test(training_itr, 50)) / training_itr
     print("=" * 40)
     if not last_test or cur_test > last_test:
@@ -290,6 +295,7 @@ def simulate(new_model, training_itr, deck_num, search_amount, explore_constant,
             {
                 "model_state_dict": network.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict":scheduler.state_dict(),
             },
             PATH,
         )
@@ -313,13 +319,13 @@ def simulate(new_model, training_itr, deck_num, search_amount, explore_constant,
 
 
 if __name__ == "__main__":
-    for _ in range(2):
+    for _ in range(1):
         simulate(
-            new_model=0,
-            training_itr=4000,
+            new_model=1,
+            training_itr=1000,
             deck_num=6,
             search_amount=300,
-            explore_constant=10,
+            explore_constant=5,
             generate_plot=False,
         )
 
