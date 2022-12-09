@@ -243,8 +243,9 @@ class BlackJackEnv:
         self.cardpool.reset()
         self.dealer.reset_round()
         self.player.reset_round()
-        self.state = None
-        
+        self.state = BlackJackState(
+            self.cardpool.cardLeft, None, None, 0, 0, 1, None,self.cardpool.cardLeft
+        )
     def new_round(self):
         """reset and then start a new round, prompt the player to make a bet if interactive,
         otherwise, use player.make_bet(bet) for a specific bet
@@ -265,8 +266,8 @@ class BlackJackEnv:
 
         revealed = self.dealer.revealed
         hands_sum = self.player.hands_sum
-        turn = 0 if not self.state else self.state.turn
-        earned = 0 if not self.state else self.state.earned
+        turn = self.state.turn
+        earned = self.state.earned
 
         lost = None
         # bet set to be 1
@@ -289,7 +290,7 @@ class BlackJackEnv:
         else:
             print("use env.new_round to start a new round")
 
-    def step(self, action):
+    def step(self, action,default_new=True):
         '''return reward, done
         '''
         self.state.turn += 1
@@ -314,7 +315,8 @@ class BlackJackEnv:
 
                     #self.history.append(self.state.lost)
                     reward = self._get_reward()
-                    self.new_round()
+                    if default_new:
+                        self.new_round()
                     return reward*double, True
 
             # then the dealer picks cards based on the default policy
@@ -339,7 +341,8 @@ class BlackJackEnv:
 
             #self.history.append(self.state.lost)
             reward = self._get_reward()
-            self.new_round()
+            if default_new:
+                self.new_round()
             return reward*double, True
 
         else:
@@ -357,7 +360,8 @@ class BlackJackEnv:
                 self.player.money += self.earned_current_turn
                 #self.history.append(self.state.lost)
                 reward = self._get_reward()
-                self.new_round()
+                if default_new:
+                    self.new_round()
                 return reward, True
 
             return self._get_reward(), False

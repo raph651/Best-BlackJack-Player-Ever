@@ -70,17 +70,32 @@ class MCT:
         self.criterion = criterion
         self.optimizer = optimizer
 
-    def reset(self, deck_num=6, search_amount=50, explore_constant=1):
+    def reset(self, deck_num=6, search_amount=50, explore_constant=1,default_new=True):
         self.env = env.BlackJackEnv(deck_num)
         self.env.reset_env()
-        self.env.new_round()
+        if default_new:
+            self.env.new_round()
         self.search_amount = search_amount
         self.explore_constant = explore_constant
 
     def expand_child(self, cur):
         cur.children = [Node(cur,0), Node(cur,1), Node(cur,2)]
 
+    '''def get_good_action(self, node,state):
+        # exploration 
+        n_explore = [i for i in range(3) if node.N[i]<self.search_amount*0.02]
+        if node==self.root and n_explore:
+            return random.choice(n_explore)
+        p = self.network(torch.FloatTensor([state]))[0][0].tolist()
+        metric =[p[i] + node.W[i]-0.05*node.N[i] for i in range(3)]
+        maxs = [i for i in range(3) if metric[i]==max(metric)]
+        return random.choice(maxs)'''    
+    
     def get_good_action(self, node,state):
+        # exploration 
+        n_explore = [i for i in range(3) if node.N[i]<self.search_amount*0.04]
+        if node==self.root and n_explore:
+            return random.choice(n_explore)
         p = self.network(torch.FloatTensor([state]))[0][0].tolist()
         PUCT_alg = (
             lambda action: self.explore_constant
@@ -91,7 +106,7 @@ class MCT:
         metric =[PUCT_alg(action) + node.Q[action] for action in range(3)]
         maxs = [i for i in range(3) if metric[i]==max(metric)]
         return random.choice(maxs)
-
+    
     def search(self):
         for _ in range(self.search_amount):
             temp_env = deepcopy(self.env)
@@ -187,7 +202,6 @@ class MCT:
         return loss_list, self.test()
 
     def test(self, times=100, iter=50):
-
         test_times = range(times)
         test_iter = range(iter)
         test_env = env.BlackJackEnv()
@@ -289,7 +303,7 @@ def simulate(new_model, training_itr, deck_num, search_amount, explore_constant,
             scheduler.step()
     cur_test = sum(tree.test(training_itr, 50)) / training_itr
     print("=" * 40)
-    if not last_test or cur_test > last_test:
+    if not last_test or cur_test > last_test-10:
         print("saved...")
         torch.save(
             {
@@ -319,13 +333,13 @@ def simulate(new_model, training_itr, deck_num, search_amount, explore_constant,
 
 
 if __name__ == "__main__":
-    for _ in range(1):
+    for _ in range(5):
         simulate(
-            new_model=1,
-            training_itr=1000,
+            new_model=0,
+            training_itr=2000,
             deck_num=6,
-            search_amount=300,
-            explore_constant=5,
+            search_amount=360,
+            explore_constant=0.8,
             generate_plot=False,
         )
 

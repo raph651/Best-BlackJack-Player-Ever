@@ -2,7 +2,7 @@ from copy import deepcopy
 
 import env
 import modified_mcts as mct
-import qnet1 as qnet
+import qnet as qnet
 import torch
 import pyswarms as ps
 import numpy as np
@@ -10,7 +10,7 @@ import random
 import pickle
 
 def gen_network():
-    PATH = "modified_param2.pth"
+    PATH = "modified_param.pth"
     network = qnet.QNet()
     checkpoint = torch.load(PATH)
     network.load_state_dict(checkpoint['model_state_dict'])
@@ -18,10 +18,11 @@ def gen_network():
 
 def run_til_end(tree):
     root = mct.Node(parent=None, prior_action=None)
+    tree.env.new_round()
     while True:
         prob_network, _v = tree.network(torch.FloatTensor([tree.env.state.input()]))
         action = torch.argmax(prob_network).item()
-        reward, done = tree.env.step(action)
+        reward, done= tree.env.step(action,default_new=False)
         if done:
             break
         root.child = mct.Node(parent=root, prior_action=action)
@@ -31,6 +32,7 @@ def run_til_end(tree):
 def gen_statistics(tree, sample_count):
     rewards = []
     temp_env = tree.env
+    print('running gen sta..')
     # get rewards data
     for _ in range(sample_count):
         tree.env = deepcopy(temp_env)
@@ -46,11 +48,10 @@ def gen_data(itr):
 
     network = gen_network()
     tree = mct.MCT(network=network, optimizer=None, criterion=None)
-    tree.reset(deck_num=6)
+    tree.reset(deck_num=6,default_new=False)
     for _ in range(itr):
         mean, var = gen_statistics(tree, sample_count=100)
-        state = tree.env.state.bet_input + [mean, var]
-
+        state = tree.env.state.cardleft + [mean, var]
         reward, env = run_til_end(tree)
         data.append((state, reward))
 
@@ -158,5 +159,5 @@ def PSO(money, data_num, training_itr, layers=[16,16,7]):
     data = gen_data(1000)
     print(objective(pos, data, money, layers))
 
-store_data(1000, 50)
+store_data(10, 5)
 PSO(money=2000, data_num=1000, training_itr=10000, layers=[16,16,7])
